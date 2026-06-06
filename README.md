@@ -13,6 +13,7 @@ This repository does not include private books, PDKs, Virtuoso libraries, netlis
 
 - Automatic Obsidian-style vault setup.
 - A `sources/` area for raw analog knowledge such as books, papers, manuals, netlists, SKILL files, and Spectre logs.
+- A source organizer that classifies raw files, writes a readable source index, and optionally moves files into category folders.
 - Source-first retrieval: `sources/` is searched before distilled wiki pages.
 - Optional PDF/EPUB extraction into `sources/extracted/`.
 - Context packs for AI assistants via `ask-pack`.
@@ -134,6 +135,28 @@ virtuoso-wiki-bridge ingest-source "D:\books\analog-design.pdf" --category books
 virtuoso-wiki-bridge extract-sources
 ```
 
+Organize raw sources after dropping files into `sources/`:
+
+```powershell
+virtuoso-wiki-bridge organize-sources
+```
+
+By default this is a dry run. It writes:
+
+```text
+vault/sources/ORGANIZE_PLAN.md
+vault/sources/INDEX.md
+vault/sources/.sources-manifest.json
+```
+
+After reviewing the plan, apply the moves:
+
+```powershell
+virtuoso-wiki-bridge organize-sources --apply
+```
+
+The organizer never deletes source files. It only keeps files where they are, or moves uncategorized files into folders such as `books/`, `papers/`, `manuals/`, `datasheets/`, `circuits/`, `spectre/`, `skill/`, `logs/`, and `notes/`. `INDEX.md` gives an assistant a compact map of your local analog knowledge before it reads individual files.
+
 Do not commit copyrighted books, private PDK documents, customer design files, or simulation results to a public GitHub repository.
 
 ## Ask With Local Knowledge
@@ -198,11 +221,14 @@ virtuoso-wiki-bridge run-spectre ".\tb_ota.scs" --name ota-ac-noise
 For analog IC design, use a tight knowledge-and-simulation loop:
 
 1. Put book excerpts, manuals, PDK caveats, netlists, prior logs, and your design notes in `sources/`.
-2. Run `ask-pack` for the current design question.
-3. Let the assistant reason from source context first, then wiki context, then its own model knowledge.
-4. Make a small schematic, testbench, SKILL, or Spectre change.
-5. Run `eval-skill`, `load-skill`, `snapshot`, or `run-spectre`.
-6. Save the result summary back into `sources/logs/` or a distilled page under `references/`, `concepts/`, `projects/`, or `synthesis/`.
+2. Run `organize-sources` to generate a plan and source index.
+3. Review the plan, then run `organize-sources --apply` if the categories are right.
+4. Run `extract-sources` if you added PDFs or EPUBs and installed the optional book dependencies.
+5. Run `ask-pack` for the current design question.
+6. Let the assistant reason from source context first, then wiki context, then its own model knowledge.
+7. Make a small schematic, testbench, SKILL, or Spectre change.
+8. Run `eval-skill`, `load-skill`, `snapshot`, or `run-spectre`.
+9. Save the result summary back into `sources/logs/` or a distilled page under `references/`, `concepts/`, `projects/`, or `synthesis/`.
 
 This gives the model local memory without embedding private material in the repo.
 
@@ -230,5 +256,6 @@ For live Virtuoso/Spectre actions, prefer small reversible steps, record the exa
 python -m pytest -q
 python -m virtuoso_wiki_bridge.cli --version
 python -m virtuoso_wiki_bridge.cli init-vault .tmp-init-test\vault --env-path .tmp-init-test\.env
+python -m virtuoso_wiki_bridge.cli organize-sources --env .tmp-init-test\.env
 python -m virtuoso_wiki_bridge.cli ask-pack "folded cascode OTA noise gm id" --env .tmp-init-test\.env -n 2
 ```

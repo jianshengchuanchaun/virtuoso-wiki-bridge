@@ -35,6 +35,33 @@ def test_build_context_can_exclude_sources(tmp_path: Path) -> None:
     assert "from source" not in context
 
 
+def test_build_context_includes_source_index(tmp_path: Path) -> None:
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    (sources / "INDEX.md").write_text("# Sources Index\n\n- `notes/ota.md` - OTA noise map", encoding="utf-8")
+    (sources / "note.txt").write_text("folded cascode pnoise details", encoding="utf-8")
+
+    context = build_context(sources, "folded cascode", limit=1)
+
+    assert "[source-index]" in context
+    assert "OTA noise map" in context
+    assert "folded cascode pnoise" in context
+
+
+def test_search_skips_generated_source_index(tmp_path: Path) -> None:
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    (sources / "INDEX.md").write_text("# Sources Index\nfolded cascode", encoding="utf-8")
+    note = sources / "note.txt"
+    note.write_text("folded cascode pnoise details", encoding="utf-8")
+
+    hits = search(sources, "folded cascode", limit=5)
+
+    assert hits
+    assert all(hit.path.name != "INDEX.md" for hit in hits)
+    assert hits[0].path == note
+
+
 def test_search_allows_hidden_parent_directory(tmp_path: Path) -> None:
     vault = tmp_path / ".tmp" / "vault"
     notes = vault / "sources" / "notes"

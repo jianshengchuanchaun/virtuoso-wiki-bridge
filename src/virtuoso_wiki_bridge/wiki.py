@@ -33,6 +33,10 @@ TEXT_FILENAMES = {
     "logFile",
     "spectre.out",
 }
+SEARCH_SKIP_FILENAMES = {
+    "INDEX.md",
+    "ORGANIZE_PLAN.md",
+}
 TOKEN_RE = re.compile(r"[A-Za-z0-9_.+#/-]+|[\u4e00-\u9fff]{1,4}")
 
 
@@ -82,6 +86,8 @@ def iter_text_files(root: Path, *, exclude_roots: Iterable[Path] = ()) -> Iterab
     excludes = tuple(path.expanduser().resolve() for path in exclude_roots)
     for path in root.rglob("*"):
         if not path.is_file():
+            continue
+        if path.name in SEARCH_SKIP_FILENAMES:
             continue
         resolved = path.resolve()
         if any(_under(resolved, excluded) for excluded in excludes):
@@ -182,9 +188,23 @@ def copy_source(source: Path, sources_dir: Path, *, category: str = "books") -> 
 
 def build_context(root: Path, query: str, *, limit: int = 6, exclude_roots: Iterable[Path] = ()) -> str:
     hits = search(root, query, limit=limit, exclude_roots=exclude_roots)
-    if not hits:
+    root_name = root.name.lower()
+    index_path = root / ("INDEX.md" if root_name == "sources" else "index.md")
+    index_text = ""
+    if index_path.is_file():
+        try:
+            index_text = read_text_file(index_path, limit_chars=24_000).strip()
+        except OSError:
+            index_text = ""
+    if not hits and not index_text:
         return "No local context found."
-    return "\n\n".join(
+    sections: list[str] = []
+    if index_text:
+        if len(index_text) > 6000:
+            index_text = index_text[:5997] + "..."
+        sections.append(f"[source-index] {index_path}\n{index_text}")
+    sections.extend(
         f"[{index}] {hit.title}\npath: {hit.path}\nscore: {hit.score:.3f}\nexcerpt: {hit.excerpt}"
         for index, hit in enumerate(hits, 1)
     )
+    return "\n\n".join(sections)

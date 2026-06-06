@@ -10,6 +10,7 @@ from . import __version__
 from .analog import ANALOG_CHECKLIST, suggested_instruction
 from .config import load_config
 from .extract import extract_all_sources, extract_source, is_extractable
+from .organize import organize_sources
 from .vault import init_vault
 from .virtuoso import doctor, eval_skill, load_skill, pull_remote_run, run_spectre_remote, snapshot, status
 from .wiki import build_context, copy_source, search
@@ -76,6 +77,34 @@ def cmd_extract_sources(args: argparse.Namespace) -> int:
         chars = f" chars={result.chars}" if result.chars else ""
         print(f"[{result.status}] {result.source}{target}{chars} {result.detail}")
     return 1 if failed else 0
+
+
+def cmd_organize_sources(args: argparse.Namespace) -> int:
+    config = load_config(args.env)
+    result = organize_sources(config.sources_dir, apply=args.apply)
+    mode = "applied" if args.apply else "dry-run"
+    moved = sum(1 for item in result.items if item.moved)
+    planned = sum(1 for item in result.items if item.path != item.target)
+    print(f"mode: {mode}")
+    print(f"sources: {result.sources_dir}")
+    print(f"files: {len(result.items)}")
+    print(f"planned_moves: {planned}")
+    print(f"moved: {moved}")
+    print(f"plan: {result.plan_path}")
+    print(f"index: {result.index_path}")
+    print(f"manifest: {result.manifest_path}")
+    if result.items:
+        print()
+        for item in result.items[: args.limit]:
+            action = "move" if item.path != item.target else "keep"
+            if item.moved:
+                action = "moved"
+            print(f"- [{action}] {item.category}: {item.path.name}")
+            print(f"  reason: {item.reason}")
+            print(f"  target: {item.target}")
+        if len(result.items) > args.limit:
+            print(f"... {len(result.items) - args.limit} more files in {result.plan_path}")
+    return 0
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -208,6 +237,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("extract-sources", parents=[common], help="Extract all PDF/EPUB files under sources into sources/extracted.")
     p.add_argument("--force", action="store_true", help="Overwrite existing extracted text files.")
     p.set_defaults(func=cmd_extract_sources)
+
+    p = sub.add_parser("organize-sources", parents=[common], help="Classify sources, write INDEX.md, and optionally move files into category folders.")
+    p.add_argument("--apply", action="store_true", help="Move files according to the generated plan. Without this, only writes a dry-run plan.")
+    p.add_argument("-n", "--limit", type=int, default=20, help="Number of plan items to print.")
+    p.set_defaults(func=cmd_organize_sources)
 
     p = sub.add_parser("search", parents=[common], help="Search sources first, then wiki pages.")
     p.add_argument("query")
