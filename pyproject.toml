@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "virtuoso-wiki-bridge"
+version = "0.1.0"
+description = "Bridge Cadence Virtuoso/Spectre workflows with an Obsidian-style analog design knowledge base"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "virtuoso-wiki-bridge contributors"}
+]
+keywords = ["virtuoso", "cadence", "spectre", "analog-design", "obsidian", "knowledge-base", "eda"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+dependencies = []
+
+[project.optional-dependencies]
+books = ["pypdf>=4", "ebooklib>=0.18", "beautifulsoup4>=4"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+virtuoso-wiki-bridge = "virtuoso_wiki_bridge.cli:main"
+vwb = "virtuoso_wiki_bridge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
