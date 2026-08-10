@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 ANALOG_CHECKLIST = """## Analog design checklist
 
 - Clarify specs: supply, process node/PDK, temperature, corners, load, input/output common-mode, signal swing, bandwidth, gain, noise, offset, power, area.

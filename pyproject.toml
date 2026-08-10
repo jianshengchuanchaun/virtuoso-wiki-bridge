@@ -1,36 +1,43 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "virtuoso-wiki-bridge"
-version = "0.1.0"
+version = "0.1.1"
 description = "Bridge Cadence Virtuoso/Spectre workflows with an Obsidian-style analog design knowledge base"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    {name = "virtuoso-wiki-bridge contributors"}
+    {name = "jianshengchuanchaun"}
 ]
 keywords = ["virtuoso", "cadence", "spectre", "analog-design", "obsidian", "knowledge-base", "eda"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
 ]
 dependencies = []
 
 [project.optional-dependencies]
 books = ["pypdf>=4", "ebooklib>=0.18", "beautifulsoup4>=4"]
-dev = ["pytest>=7"]
+dev = ["build>=1", "pytest>=7", "pytest-cov>=4", "ruff>=0.11", "twine>=5"]
+
+[project.urls]
+Homepage = "https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge"
+Repository = "https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge"
+Issues = "https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge/issues"
 
 [project.scripts]
 virtuoso-wiki-bridge = "virtuoso_wiki_bridge.cli:main"
@@ -38,3 +45,22 @@ vwb = "virtuoso_wiki_bridge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+branch = true
+source = ["virtuoso_wiki_bridge"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "I"]

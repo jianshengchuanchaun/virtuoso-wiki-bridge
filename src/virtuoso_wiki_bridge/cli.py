@@ -3,40 +3,78 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
 from . import __version__
 from .analog import ANALOG_CHECKLIST, suggested_instruction
-from .config import load_config
+from .config import AppConfig, load_config
 from .extract import extract_all_sources, extract_source, is_extractable
 from .organize import organize_sources
-from .vault import init_vault
-from .virtuoso import doctor, eval_skill, load_skill, pull_remote_run, run_spectre_remote, snapshot, status
+from .text_safety import sanitize_untrusted_field, sanitize_untrusted_text
+from .vault import DEFAULT_SOURCE_SUBFOLDERS, init_vault
+from .virtuoso import (
+    DEFAULT_EVAL_TIMEOUT,
+    DEFAULT_LOAD_TIMEOUT,
+    DEFAULT_PULL_TIMEOUT,
+    DEFAULT_SNAPSHOT_TIMEOUT,
+    DEFAULT_SPECTRE_TIMEOUT,
+    doctor,
+    eval_skill,
+    load_skill,
+    pull_remote_run,
+    run_spectre_remote,
+    snapshot,
+    status,
+)
 from .wiki import build_context, copy_source, search
+
+INGEST_CATEGORIES = tuple(category for category in DEFAULT_SOURCE_SUBFOLDERS if category != "extracted")
 
 
 def _print_result(name: str, ok: bool, detail: str) -> None:
-    print(f"[{'ok' if ok else 'fail'}] {name}: {detail}")
+    print(f"[{'ok' if ok else 'fail'}] {sanitize_untrusted_field(name)}: {sanitize_untrusted_text(detail)}")
+
+
+def _print_config_context(config: AppConfig) -> None:
+    env_label = config.env_path if config.env_path is not None else "<process environment and defaults>"
+    print(f"env: {sanitize_untrusted_field(env_label)}")
+    print(f"vault: {sanitize_untrusted_field(config.vault_path)}")
+    print(f"sources: {sanitize_untrusted_field(config.sources_dir)}")
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
 
 
 def cmd_init_vault(args: argparse.Namespace) -> int:
+    env_option = getattr(args, "env", None)
+    if args.env_path and env_option:
+        env_path = Path(args.env_path).expanduser().resolve()
+        env_option_path = Path(env_option).expanduser().resolve()
+        if env_path != env_option_path:
+            raise ValueError("--env and --env-path must refer to the same file when both are provided")
+    selected_env_path = args.env_path or env_option or ".env"
     result = init_vault(
         args.path,
-        env_path=args.env_path,
+        env_path=selected_env_path,
         force_env=args.force_env,
         remote_workdir=args.remote_workdir,
     )
-    print(f"vault: {result.vault_path}")
-    print(f"env: {result.env_path}")
+    print(f"vault: {sanitize_untrusted_field(result.vault_path)}")
+    print(f"env: {sanitize_untrusted_field(result.env_path)}")
     print(f"env_written: {result.env_written}")
     print(f"created: {len(result.created)}")
     for path in result.created:
-        print(f"  + {path}")
+        print(f"  + {sanitize_untrusted_field(path)}")
     if result.skipped:
         print(f"skipped_existing: {len(result.skipped)}")
         for path in result.skipped[:20]:
-            print(f"  = {path}")
+            print(f"  = {sanitize_untrusted_field(path)}")
         if len(result.skipped) > 20:
             print(f"  ... {len(result.skipped) - 20} more")
     return 0
@@ -53,57 +91,79 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_ingest_source(args: argparse.Namespace) -> int:
     config = load_config(args.env)
+    _print_config_context(config)
     target = copy_source(Path(args.path), config.sources_dir, category=args.category)
-    print(f"copied: {target}")
+    print(f"copied: {sanitize_untrusted_field(target)}")
     if args.extract and is_extractable(target):
-        result = extract_source(target, config.sources_dir / "extracted", force=args.force_extract)
-        print(f"extraction: {result.status} {result.detail}")
+        result = extract_source(
+            target,
+            config.sources_dir / "extracted",
+            force=args.force_extract,
+            source_root=config.sources_dir,
+        )
+        print(
+            f"extraction: {sanitize_untrusted_field(result.status)} "
+            f"{sanitize_untrusted_text(result.detail)}"
+        )
         if result.target:
-            print(f"extracted_text: {result.target}")
+            print(f"extracted_text: {sanitize_untrusted_field(result.target)}")
+        if result.status in {"failed", "empty"}:
+            return 1
     print("Text retrieval works best for extracted text, .md/.txt/.scs/.cdl/.il/.va/.tex/.log files.")
     return 0
 
 
 def cmd_extract_sources(args: argparse.Namespace) -> int:
     config = load_config(args.env)
+    _print_config_context(config)
     results = extract_all_sources(config.sources_dir, force=args.force)
     if not results:
-        print(f"No PDF/EPUB sources found under {config.sources_dir}.")
+        print(f"No PDF/EPUB sources found under {sanitize_untrusted_field(config.sources_dir)}.")
         return 0
     failed = False
     for result in results:
-        failed = failed or result.status == "failed"
-        target = f" -> {result.target}" if result.target else ""
+        failed = failed or result.status in {"failed", "empty"}
+        target = f" -> {sanitize_untrusted_field(result.target)}" if result.target else ""
         chars = f" chars={result.chars}" if result.chars else ""
-        print(f"[{result.status}] {result.source}{target}{chars} {result.detail}")
+        print(
+            f"[{sanitize_untrusted_field(result.status)}] {sanitize_untrusted_field(result.source)}"
+            f"{target}{chars} {sanitize_untrusted_text(result.detail)}"
+        )
     return 1 if failed else 0
 
 
 def cmd_organize_sources(args: argparse.Namespace) -> int:
     config = load_config(args.env)
+    _print_config_context(config)
     result = organize_sources(config.sources_dir, apply=args.apply)
     mode = "applied" if args.apply else "dry-run"
     moved = sum(1 for item in result.items if item.moved)
     planned = sum(1 for item in result.items if item.path != item.target)
     print(f"mode: {mode}")
-    print(f"sources: {result.sources_dir}")
+    print(f"sources: {sanitize_untrusted_field(result.sources_dir)}")
     print(f"files: {len(result.items)}")
     print(f"planned_moves: {planned}")
     print(f"moved: {moved}")
-    print(f"plan: {result.plan_path}")
-    print(f"index: {result.index_path}")
-    print(f"manifest: {result.manifest_path}")
+    print(f"plan: {sanitize_untrusted_field(result.plan_path)}")
+    print(f"index: {sanitize_untrusted_field(result.index_path)}")
+    print(f"manifest: {sanitize_untrusted_field(result.manifest_path)}")
     if result.items:
         print()
         for item in result.items[: args.limit]:
             action = "move" if item.path != item.target else "keep"
             if item.moved:
                 action = "moved"
-            print(f"- [{action}] {item.category}: {item.path.name}")
-            print(f"  reason: {item.reason}")
-            print(f"  target: {item.target}")
+            print(
+                f"- [{action}] {sanitize_untrusted_field(item.category)}: "
+                f"{sanitize_untrusted_field(item.path.name)}"
+            )
+            print(f"  reason: {sanitize_untrusted_field(item.reason)}")
+            print(f"  target: {sanitize_untrusted_field(item.target)}")
         if len(result.items) > args.limit:
-            print(f"... {len(result.items) - args.limit} more files in {result.plan_path}")
+            print(
+                f"... {len(result.items) - args.limit} more files in "
+                f"{sanitize_untrusted_field(result.plan_path)}"
+            )
     return 0
 
 
@@ -133,10 +193,10 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     hits.sort(key=sort_key, reverse=True)
     for index, hit in enumerate(hits[: args.limit], 1):
-        print(f"{index}. {hit.title}")
+        print(f"{index}. {sanitize_untrusted_field(hit.title)}")
         print(f"   score: {hit.score:.3f}")
-        print(f"   path: {hit.path}")
-        print(f"   {hit.excerpt}")
+        print(f"   path: {sanitize_untrusted_field(hit.path)}")
+        print(f"   {sanitize_untrusted_field(hit.excerpt)}")
     if not hits:
         print("No matches.")
     return 0
@@ -149,7 +209,7 @@ def cmd_ask_pack(args: argparse.Namespace) -> int:
     print("# Virtuoso analog reasoning context")
     print()
     print("## Question")
-    print(args.question)
+    print(sanitize_untrusted_text(args.question))
     print()
     print("## Source context")
     print(source_context)
@@ -166,11 +226,11 @@ def cmd_ask_pack(args: argparse.Namespace) -> int:
 
 def _print_summary(summary) -> int:
     if summary.stdout:
-        print(summary.stdout, end="")
+        print(sanitize_untrusted_text(summary.stdout), end="")
     if summary.stderr:
-        print(summary.stderr, end="", file=sys.stderr)
+        print(sanitize_untrusted_text(summary.stderr), end="", file=sys.stderr)
     if summary.remote_dir:
-        print(f"\nremote_dir: {summary.remote_dir}")
+        print(f"\nremote_dir: {sanitize_untrusted_field(summary.remote_dir)}")
     print(f"elapsed_seconds: {summary.elapsed_seconds:.1f}")
     print(f"returncode: {summary.returncode}")
     return summary.returncode
@@ -201,14 +261,18 @@ def cmd_run_spectre(args: argparse.Namespace) -> int:
 
 def cmd_pull_run(args: argparse.Namespace) -> int:
     config = load_config(args.env)
-    rc = pull_remote_run(config, args.remote_dir, Path(args.local_dir))
+    rc = pull_remote_run(config, args.run_name, Path(args.local_dir), timeout=args.timeout)
     print(f"returncode: {rc}")
     return rc
 
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--env", help="Path to .env. Defaults to ./.env, then ~/.virtuoso-wiki-bridge/.env.")
+    common.add_argument(
+        "--env",
+        default=argparse.SUPPRESS,
+        help="Path to .env. May appear before or after the command.",
+    )
     parser = argparse.ArgumentParser(
         prog="virtuoso-wiki-bridge",
         description="Combine Virtuoso/Spectre bridge operations with an Obsidian-style analog knowledge base.",
@@ -217,9 +281,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="store_true", help="Print version and exit.")
     sub = parser.add_subparsers(dest="command")
 
-    p = sub.add_parser("init-vault", help="Create an analog design wiki vault and matching .env.")
+    p = sub.add_parser(
+        "init-vault",
+        parents=[common],
+        help="Create an analog design wiki vault and matching .env.",
+    )
     p.add_argument("path", help="Vault directory to create.")
-    p.add_argument("--env-path", default=".env", help="Where to write generated .env. Default: .env.")
+    p.add_argument("--env-path", help="Backward-compatible alias for --env when creating the generated .env.")
     p.add_argument("--force-env", action="store_true", help="Overwrite env-path if it already exists.")
     p.add_argument("--remote-workdir", default="~/virtuoso-work/virtuoso-wiki-bridge")
     p.set_defaults(func=cmd_init_vault)
@@ -229,7 +297,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("ingest-source", parents=[common], help="Copy a book/paper/netlist/SKILL file into sources.")
     p.add_argument("path")
-    p.add_argument("--category", default="books", help="Subfolder under sources. Default: books.")
+    p.add_argument(
+        "--category",
+        choices=INGEST_CATEGORIES,
+        default="books",
+        help="Allowed source subfolder. Default: books.",
+    )
     p.add_argument("--extract", action=argparse.BooleanOptionalAction, default=True, help="Extract PDF/EPUB text when possible.")
     p.add_argument("--force-extract", action="store_true", help="Overwrite an existing extracted text file.")
     p.set_defaults(func=cmd_ingest_source)
@@ -258,28 +331,54 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("eval-skill", parents=[common], help="Run inline SKILL through upstream virtuoso-bridge.")
     p.add_argument("expr")
-    p.add_argument("--timeout", type=int)
+    p.add_argument(
+        "--timeout",
+        type=_positive_int,
+        default=DEFAULT_EVAL_TIMEOUT,
+        help=f"Operation timeout in seconds. Default: {DEFAULT_EVAL_TIMEOUT}.",
+    )
     p.set_defaults(func=cmd_eval_skill)
 
     p = sub.add_parser("load-skill", parents=[common], help="Load a .il/.skill file through upstream virtuoso-bridge.")
     p.add_argument("path")
-    p.add_argument("--timeout", type=int)
+    p.add_argument(
+        "--timeout",
+        type=_positive_int,
+        default=DEFAULT_LOAD_TIMEOUT,
+        help=f"Operation timeout in seconds. Default: {DEFAULT_LOAD_TIMEOUT}.",
+    )
     p.set_defaults(func=cmd_load_skill)
 
     p = sub.add_parser("snapshot", parents=[common], help="Capture focused Virtuoso/Maestro state via upstream bridge.")
     p.add_argument("-o", "--output")
-    p.add_argument("--timeout", type=int)
+    p.add_argument(
+        "--timeout",
+        type=_positive_int,
+        default=DEFAULT_SNAPSHOT_TIMEOUT,
+        help=f"Operation timeout in seconds. Default: {DEFAULT_SNAPSHOT_TIMEOUT}.",
+    )
     p.set_defaults(func=cmd_snapshot)
 
     p = sub.add_parser("run-spectre", parents=[common], help="Run a Spectre netlist over optional SSH fallback.")
     p.add_argument("netlist")
     p.add_argument("--name")
-    p.add_argument("--timeout", type=int)
+    p.add_argument(
+        "--timeout",
+        type=_positive_int,
+        default=DEFAULT_SPECTRE_TIMEOUT,
+        help=f"Per-process timeout in seconds. Default: {DEFAULT_SPECTRE_TIMEOUT}.",
+    )
     p.set_defaults(func=cmd_run_spectre)
 
-    p = sub.add_parser("pull-run", parents=[common], help="Pull an optional SSH run directory back locally.")
-    p.add_argument("remote_dir")
+    p = sub.add_parser("pull-run", parents=[common], help="Pull a named SSH run from the configured runs directory.")
+    p.add_argument("run_name", help="Safe run name previously used with run-spectre --name.")
     p.add_argument("local_dir")
+    p.add_argument(
+        "--timeout",
+        type=_positive_int,
+        default=DEFAULT_PULL_TIMEOUT,
+        help=f"Operation timeout in seconds. Default: {DEFAULT_PULL_TIMEOUT}.",
+    )
     p.set_defaults(func=cmd_pull_run)
     return parser
 
@@ -293,7 +392,14 @@ def main(argv: list[str] | None = None) -> int:
     if not hasattr(args, "func"):
         parser.print_help()
         return 0
-    return args.func(args)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("error: interrupted", file=sys.stderr)
+        return 130
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f"error: {sanitize_untrusted_text(exc)}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
