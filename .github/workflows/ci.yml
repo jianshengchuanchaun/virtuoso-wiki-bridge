@@ -32,7 +32,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.9", "3.12", "3.14"]
-    runs-on: ${{ matrix.os }}
+    # Ubuntu 26.04 does not provide a Python 3.9 build in setup-python.
+    runs-on: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.9' && 'ubuntu-24.04' || matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
