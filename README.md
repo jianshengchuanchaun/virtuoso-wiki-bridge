@@ -1,5 +1,7 @@
 # virtuoso-wiki-bridge
 
+[简体中文](README.zh-CN.md) | **English**
+
 [![CI](https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge/blob/main/LICENSE)
