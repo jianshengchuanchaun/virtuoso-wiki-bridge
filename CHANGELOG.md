@@ -2,6 +2,30 @@
 
 All notable changes are documented here. The project follows semantic versioning while it remains in alpha; minor releases may still refine command behavior.
 
+## 0.2.0 - 2026-11-14
+
+### Added
+
+- Windows CMD/PowerShell installer for an isolated environment, PDF/EPUB support and automatic vault setup; optional upstream bridge installation.
+- `vwb setup`: complete personal-vault layout, a getting-started guide and three bundled agent skills for queries, document ingestion and VM workflows.
+- Opt-in desktop CMD with interactive choice, explicit automation flags, redirected Desktop discovery and preservation of existing files.
+- `vwb start`: local usage hints and startup of an explicitly configured bridge, with `--offline` and a finite timeout.
+- Templates packaged in wheels and source distributions, plus setup, repeat-install and Unicode launcher regression tests.
+
+### Changed
+
+- Default vault name is `个人知识库`; `init-vault` now accepts an omitted path. Existing `.env` selections take precedence.
+- Setup fills missing files without replacing notes, skills, Obsidian settings or `.env`. A conflicting new path requires a separate configuration file.
+- Generated manifests include ingestion statistics. Usage guides distinguish extraction from AI distillation.
+- Wiki traversal prunes excluded, hidden and link-like subtrees before scanning. `VWB_WIKI_EXCLUDE_DIRS` configures semicolon-separated vault-relative exclusions without changing source search.
+- Checkout launchers use the installation and selected config rather than a machine-specific bridge path.
+
+### Migration
+
+- Existing configured vaults do not move. If a script depended on the unconfigured current-directory fallback, set `VWB_VAULT_PATH=.` explicitly.
+- `pip install` installs code; follow it with `vwb setup`. The Windows installer performs both steps.
+- Existing guides and skills are preserved; compare with bundled templates for later changes. Recreate desktop entries after moving the installation.
+
 ## 0.1.1 - 2026-08-10
 
 ### Security

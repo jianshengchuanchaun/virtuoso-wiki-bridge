@@ -136,26 +136,26 @@ def iter_text_files(root: Path, *, exclude_roots: Iterable[Path] = ()) -> Iterab
         return
     root = root.expanduser().resolve()
     excludes = tuple(path.expanduser().resolve() for path in exclude_roots)
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if _is_link_like(path):
-            continue
-        if path.name in SEARCH_SKIP_FILENAMES:
-            continue
-        resolved = path.resolve()
-        if not _under(resolved, root):
-            continue
-        if any(_under(resolved, excluded) for excluded in excludes):
-            continue
-        try:
-            relative_parts = resolved.relative_to(root).parts
-        except ValueError:
-            relative_parts = path.parts
-        if any(part.startswith(".") and part != ".obsidian" for part in relative_parts):
-            continue
-        if path.suffix.lower() in TEXT_EXTENSIONS or path.name in TEXT_FILENAMES:
-            yield path
+    def visible(path: Path) -> bool:
+        return (
+            not _is_link_like(path)
+            and (not path.name.startswith(".") or path.name == ".obsidian")
+            and not any(_under(path, excluded) for excluded in excludes)
+        )
+
+    if any(_under(root, excluded) for excluded in excludes):
+        return
+    for directory, directories, filenames in os.walk(root, followlinks=False):
+        base = Path(directory)
+        directories[:] = sorted(name for name in directories if visible(base / name))
+        for name in sorted(filenames):
+            path = base / name
+            if not visible(path) or not path.is_file():
+                continue
+            if path.name in SEARCH_SKIP_FILENAMES:
+                continue
+            if path.suffix.lower() in TEXT_EXTENSIONS or path.name in TEXT_FILENAMES:
+                yield path
 
 
 def title_for(path: Path, text: str) -> str:

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+DEFAULT_VAULT_NAME = "个人知识库"
+
 
 def _strip_inline_comment(value: str) -> str:
     quote: str | None = None
@@ -139,12 +141,13 @@ class AppConfig:
     env_path: Path | None = None
     bridge_profile: str = ""
     bridge_env: Path | None = None
+    wiki_exclude_roots: tuple[Path, ...] = ()
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, str], env_path: Path | None = None) -> "AppConfig":
         base = env_path.parent.resolve() if env_path is not None else Path.cwd().resolve()
         vault = _local_path(
-            values.get("VWB_VAULT_PATH") or values.get("OBSIDIAN_VAULT_PATH") or ".",
+            values.get("VWB_VAULT_PATH") or values.get("OBSIDIAN_VAULT_PATH") or DEFAULT_VAULT_NAME,
             base=base,
         )
         sources_value = values.get("VWB_SOURCES_DIR") or values.get("OBSIDIAN_SOURCES_DIR")
@@ -179,6 +182,11 @@ class AppConfig:
             bridge_cmd=values.get("VWB_VIRTUOSO_BRIDGE_CMD", "virtuoso-bridge").strip() or "virtuoso-bridge",
             bridge_profile=values.get("VWB_VIRTUOSO_BRIDGE_PROFILE", "").strip(),
             bridge_env=bridge_env,
+            wiki_exclude_roots=tuple(
+                _local_path(value.strip(), base=vault)
+                for value in values.get("VWB_WIKI_EXCLUDE_DIRS", "").split(";")
+                if value.strip()
+            ),
             remote=remote,
             env_path=env_path,
         )

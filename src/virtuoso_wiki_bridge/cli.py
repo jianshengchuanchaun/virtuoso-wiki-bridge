@@ -12,9 +12,11 @@ from .analog import ANALOG_CHECKLIST, suggested_instruction
 from .config import AppConfig, load_config
 from .extract import extract_all_sources, extract_source, is_extractable
 from .organize import organize_sources
+from .setup import run_setup, setup_vault_path
 from .text_safety import sanitize_untrusted_field, sanitize_untrusted_text
 from .vault import DEFAULT_SOURCE_SUBFOLDERS, init_vault
 from .virtuoso import (
+    DEFAULT_BRIDGE_TIMEOUT,
     DEFAULT_EVAL_TIMEOUT,
     DEFAULT_LOAD_TIMEOUT,
     DEFAULT_PULL_TIMEOUT,
@@ -24,6 +26,7 @@ from .virtuoso import (
     eval_skill,
     load_skill,
     pull_remote_run,
+    run_bridge_command,
     run_spectre_remote,
     snapshot,
     status,
@@ -60,7 +63,7 @@ def cmd_init_vault(args: argparse.Namespace) -> int:
             raise ValueError("--env and --env-path must refer to the same file when both are provided")
     selected_env_path = args.env_path or env_option or ".env"
     result = init_vault(
-        args.path,
+        setup_vault_path(args.path, Path(selected_env_path).absolute()),
         env_path=selected_env_path,
         force_env=args.force_env,
         remote_workdir=args.remote_workdir,
@@ -78,6 +81,44 @@ def cmd_init_vault(args: argparse.Namespace) -> int:
         if len(result.skipped) > 20:
             print(f"  ... {len(result.skipped) - 20} more")
     return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    result, launcher = run_setup(
+        args.path, Path(args.env or ".env"), desktop=args.desktop,
+        desktop_dir=Path(args.desktop_dir) if args.desktop_dir else None,
+    )
+    print(f"个人知识库 / vault: {sanitize_untrusted_field(result.vault_path)}")
+    print(f"env: {sanitize_untrusted_field(result.env_path)}")
+    print(f"created: {len(result.created)}; preserved: {len(result.skipped)}")
+    print("使用说明 / guide: START_HERE.md")
+    print("Agent skills: .agents/skills (open the vault as your agent workspace)")
+    if launcher:
+        target, created = launcher
+        print(f"desktop: {sanitize_untrusted_field(target)} ({'created' if created else 'existing file preserved'})")
+    else:
+        print("Desktop CMD not created. On Windows, rerun setup --desktop yes to opt in.")
+    print("Put books in sources/books, then run: vwb extract-sources")
+    print("Extraction prepares searchable text; ask your AI agent to distill it into wiki pages.")
+    print("Next: vwb start (local knowledge is available before configuring a VM)")
+    return 0
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    config = load_config(args.env)
+    if not config.vault_path.is_dir():
+        raise ValueError("Vault not found. Run vwb setup first.")
+    _print_config_context(config)
+    print("个人知识库已就绪 / Personal wiki ready.")
+    print('Commands: vwb search "密勒补偿" | vwb ask-pack "OTA phase margin" | vwb extract-sources')
+    print(f"Guide: {sanitize_untrusted_field(config.vault_path / 'START_HERE.md')}")
+    if args.offline:
+        return 0
+    if not (config.bridge_profile or config.bridge_env):
+        print("Local mode: set VWB_VIRTUOSO_BRIDGE_ENV or VWB_VIRTUOSO_BRIDGE_PROFILE to enable bridge startup.")
+        return 0
+    print("Starting the configured upstream bridge; no circuit or simulation is loaded.")
+    return _print_summary(run_bridge_command(config, ["start"], timeout=args.timeout))
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -178,7 +219,10 @@ def cmd_search(args: argparse.Namespace) -> int:
             seen.add(key)
             hits.append(hit)
     if config.sources_dir.resolve() != config.vault_path.resolve():
-        for hit in search(config.vault_path, args.query, limit=args.limit, exclude_roots=(config.sources_dir,)):
+        for hit in search(
+            config.vault_path, args.query, limit=args.limit,
+            exclude_roots=(config.sources_dir, *getattr(config, "wiki_exclude_roots", ())),
+        ):
             key = hit.path.resolve()
             if key not in seen:
                 seen.add(key)
@@ -205,7 +249,10 @@ def cmd_search(args: argparse.Namespace) -> int:
 def cmd_ask_pack(args: argparse.Namespace) -> int:
     config = load_config(args.env)
     source_context = build_context(config.sources_dir, args.question, limit=args.limit)
-    wiki_context = build_context(config.vault_path, args.question, limit=args.limit, exclude_roots=(config.sources_dir,))
+    wiki_context = build_context(
+        config.vault_path, args.question, limit=args.limit,
+        exclude_roots=(config.sources_dir, *getattr(config, "wiki_exclude_roots", ())),
+    )
     print("# Virtuoso analog reasoning context")
     print()
     print("## Question")
@@ -286,11 +333,23 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common],
         help="Create an analog design wiki vault and matching .env.",
     )
-    p.add_argument("path", help="Vault directory to create.")
+    p.add_argument("path", nargs="?", help="Vault directory. Default: configured vault or ./个人知识库 beside .env.")
     p.add_argument("--env-path", help="Backward-compatible alias for --env when creating the generated .env.")
     p.add_argument("--force-env", action="store_true", help="Overwrite env-path if it already exists.")
     p.add_argument("--remote-workdir", default="~/virtuoso-work/virtuoso-wiki-bridge")
     p.set_defaults(func=cmd_init_vault)
+
+    p = sub.add_parser("setup", parents=[common], help="Set up 个人知识库, guides, agent skills and an optional desktop CMD.")
+    p.add_argument("path", nargs="?", help="Optional custom vault path; existing configuration is reused.")
+    p.add_argument("--desktop", choices=("ask", "yes", "no"), default="ask",
+                   help="Windows desktop CMD: ask interactively (default), yes, or no. Noninteractive ask skips it.")
+    p.add_argument("--desktop-dir", help="Override the Windows Desktop directory (requires opt-in as usual).")
+    p.set_defaults(func=cmd_setup)
+
+    p = sub.add_parser("start", parents=[common], help="Show wiki help and start an explicitly configured upstream bridge.")
+    p.add_argument("--offline", action="store_true", help="Use local knowledge without starting the VM bridge.")
+    p.add_argument("--timeout", type=_positive_int, default=DEFAULT_BRIDGE_TIMEOUT)
+    p.set_defaults(func=cmd_start)
 
     p = sub.add_parser("doctor", parents=[common], help="Check vault, sources, bridge CLI, and optional SSH.")
     p.set_defaults(func=cmd_doctor)

@@ -15,6 +15,7 @@ dist/
 .env
 .tmp-init-test/
 vault/
+个人知识库/
 local-vault/
 private-vault/
 *.log
@@ -33,3 +34,9 @@ spectre-results/
 virtuoso-results/
 runs/
 tmp/
+
+# Machine-local installation and verification
+local-config/
+installation/
+.env.*
+!.env.example

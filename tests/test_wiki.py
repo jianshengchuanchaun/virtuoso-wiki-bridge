@@ -50,6 +50,25 @@ def test_build_context_can_exclude_sources(tmp_path: Path) -> None:
     assert "from source" not in context
 
 
+def test_excluded_database_is_not_traversed(tmp_path: Path, monkeypatch) -> None:
+    import os
+
+    database = tmp_path / "projects/database"
+    database.mkdir(parents=True)
+    (database / "large.scs").write_text("noise", encoding="utf-8")
+    note = tmp_path / "note.md"
+    note.write_text("# Note\nnoise from the user's wiki", encoding="utf-8")
+    original_scandir = os.scandir
+
+    def guarded_scandir(path):
+        assert Path(path).resolve() != database.resolve(), "Excluded database was traversed"
+        return original_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", guarded_scandir)
+    hits = search(tmp_path, "noise", exclude_roots=(database,))
+    assert [hit.path for hit in hits] == [note]
+
+
 def test_build_context_includes_source_index(tmp_path: Path) -> None:
     sources = tmp_path / "sources"
     sources.mkdir()

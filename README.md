@@ -14,7 +14,7 @@
 
 The package does not contain PDKs, books, customer designs, Virtuoso libraries, credentials, or simulation results. Those remain in a user-controlled local vault.
 
-Version `0.1.1` is an alpha safety release. It adds reviewed two-phase source organization, no-clobber ingest and extraction, path and symlink containment, safe remote run names, explicit timeouts, privacy-safe generated vaults, and regression tests. See the [changelog](https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge/blob/main/CHANGELOG.md) for the complete list.
+Version `0.2.0` adds a Windows installer, a default **个人知识库** (personal knowledge base), bundled usage skills, and an opt-in desktop CMD launcher. Repeated setup preserves existing notes and configuration. See the [Chinese usage guide](USER_GUIDE.zh-CN.md) and [changelog](CHANGELOG.md).
 
 ## What it provides
 
@@ -47,20 +47,19 @@ On Windows PowerShell:
 ```powershell
 git clone https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge.git
 Set-Location .\virtuoso-wiki-bridge
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev,books]"
-virtuoso-wiki-bridge --version
+.\Install-VirtuosoWiki.cmd
 ```
 
-Install only the core package if PDF/EPUB extraction is not needed:
+Alternatively, download the repository ZIP and double-click `Install-VirtuosoWiki.cmd`. It creates `.venv`, installs PDF/EPUB support, initializes the vault and asks about a desktop CMD in an interactive Windows terminal. Use `Install-VirtuosoWiki.ps1 -Desktop Yes` or `-Desktop No` for an explicit choice. Existing desktop files are preserved.
+
+For Linux/macOS or manual package installation:
 
 ```powershell
-python -m pip install -e .
+python -m pip install -e ".[books]"
+vwb setup --desktop no
 ```
 
-To use live Virtuoso wrappers, install the upstream bridge in its own checkout or environment and follow its current setup instructions:
+`pip install` installs code; `setup` creates user files. The Windows installer performs both steps. Omit `[books]` for core-only use. To use live Virtuoso wrappers, install and configure the upstream bridge; the Windows installer accepts `-WithBridge` to install it in the same environment. Follow the upstream setup instructions:
 
 ```powershell
 virtuoso-bridge init user@host
@@ -70,17 +69,23 @@ virtuoso-bridge status
 
 ## Quick start
 
-Create a local vault and a matching `.env` (the default output is `./.env`):
+Create a local vault and a matching `.env` (default `./.env`, new vault directory `个人知识库`):
 
 ```powershell
-virtuoso-wiki-bridge init-vault .\vault
+vwb setup
+# Initialize without a desktop prompt:
+vwb init-vault
 ```
 
 Choose a different generated configuration path with the same global `--env` option used by other commands:
 
 ```powershell
-virtuoso-wiki-bridge init-vault .\vault --env .\config\vwb.env
+vwb setup "D:\MyNotes\个人知识库" --env .\config\vwb.env --desktop no
 ```
+
+Without a path argument, setup reuses the existing `.env` vault selection or creates `个人知识库` beside a new configuration file. Repeated setup fills missing files and preserves notes, skills and configuration.
+
+Double-click `Start-VirtuosoWiki.cmd` to open a terminal with `vwb`. It stays local until an upstream env/profile is configured, then attempts to start that bridge. `vwb start --offline` always skips the connection.
 
 Add a source:
 
@@ -97,8 +102,8 @@ virtuoso-wiki-bridge organize-sources
 Review both files before applying:
 
 ```text
-vault/sources/ORGANIZE_PLAN.md
-vault/sources/.sources-plan.json
+个人知识库/sources/ORGANIZE_PLAN.md
+个人知识库/sources/.sources-plan.json
 ```
 
 Then apply the exact reviewed plan:
@@ -137,6 +142,7 @@ Core variables:
 | Variable | Purpose |
 | --- | --- |
 | `VWB_VAULT_PATH` | Local vault root. |
+| `VWB_WIKI_EXCLUDE_DIRS` | Semicolon-separated vault-relative subtrees pruned from wiki search; raw source search is unchanged. |
 | `VWB_SOURCES_DIR` | Raw source root; defaults to `<vault>/sources`. |
 | `OBSIDIAN_VAULT_PATH` | Compatibility alias for the vault root. |
 | `OBSIDIAN_SOURCES_DIR` | Compatibility alias for the source root. |
@@ -157,7 +163,7 @@ Do not commit `.env`, SSH keys, private bridge profiles, or site-specific Cadenc
 `init-vault` creates:
 
 ```text
-vault/
+个人知识库/
   concepts/
   entities/
   journal/
@@ -183,12 +189,19 @@ vault/
   .obsidian/
   .gitignore
   .manifest.json
+  START_HERE.md
+  .agents/skills/
+    vwb-personal-wiki/SKILL.md
+    vwb-ingest-books/SKILL.md
+    vwb-bridge-workflow/SKILL.md
   index.md
   log.md
   hot.md
 ```
 
-Generated Markdown pages include `title`, `category`, `tags`, `sources`, `created`, and `updated` frontmatter. Generated logs and extracted-source metadata use vault-relative identities instead of leaking absolute local paths.
+Folder guides, index/log pages and extracted text include `title`, `category`, `tags`, `sources`, `created`, and `updated` frontmatter. Generated logs and extracted-source metadata use vault-relative identities instead of leaking absolute local paths.
+
+`START_HERE.md` explains where to put files and how to query the vault. The three `.agents/skills` guide knowledge queries, incremental document distillation and bridge operations. Open the vault as a workspace in a compatible agent client, or read the skill files manually. Skills are instructions, not background jobs: extraction prepares text, while an AI assistant reads it and updates the wiki. The package does not bundle an LLM service or API credentials.
 
 The vault-local `.gitignore` protects raw sources, `.env` files, simulator products, run directories, and local Obsidian UI state. It deliberately leaves generated folder guides trackable. If a vault already has a `.gitignore`, initialization requires the exact generated safety block at the end, so later negations cannot silently reopen private paths. Custom rules may appear before that block. Initialization also rejects nested `.gitignore` files under `sources/`, because closer rules can override the root policy. These checks happen before vault content is written. Always inspect `git status` before publishing a vault; ignore rules are a safety layer, not permission to publish proprietary material, and cannot untrack files already committed to Git.
 
@@ -325,7 +338,9 @@ The pull command no longer accepts an arbitrary remote directory and refuses an 
 
 | Command | Purpose |
 | --- | --- |
-| `init-vault PATH` | Create a local vault and matching `.env`. |
+| `setup [PATH]` | Initialize a personal vault, guides, skills and an opt-in Windows desktop entry. |
+| `init-vault [PATH]` | Initialize without a desktop prompt; default is the configured vault or 个人知识库. |
+| `start [--offline]` | Show usage hints and optionally start the selected upstream bridge. |
 | `doctor` | Check vault, sources, upstream bridge, and optional SSH. |
 | `ingest-source PATH` | Safely copy a source into an allowed category. |
 | `extract-sources` | Extract all local PDFs/EPUBs into stable text targets. |

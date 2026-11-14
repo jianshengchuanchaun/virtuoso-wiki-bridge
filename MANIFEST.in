@@ -4,4 +4,12 @@ include CHANGELOG.md
 include CONTRIBUTING.md
 include LICENSE
 include README.md
+include README.zh-CN.md
+include USER_GUIDE.zh-CN.md
+include Install-VirtuosoWiki.cmd
+include Install-VirtuosoWiki.ps1
+include Start-VirtuosoWiki.cmd
+include Start-VirtuosoWiki.ps1
+include vwb.cmd
+recursive-include src/virtuoso_wiki_bridge/templates *.md
 include SECURITY.md

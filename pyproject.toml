@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "virtuoso-wiki-bridge"
-version = "0.1.1"
+version = "0.2.0"
 description = "Bridge Cadence Virtuoso/Spectre workflows with an Obsidian-style analog design knowledge base"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -45,6 +45,9 @@ vwb = "virtuoso_wiki_bridge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+virtuoso_wiki_bridge = ["templates/*.md", "templates/skills/*.md", "templates/agent-skills/*/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

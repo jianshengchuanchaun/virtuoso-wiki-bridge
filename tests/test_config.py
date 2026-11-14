@@ -66,6 +66,18 @@ def test_bridge_profile_is_loaded() -> None:
     assert config.bridge_profile == "gf22"
 
 
+def test_wiki_exclusions_are_relative_to_vault_not_config(tmp_path: Path) -> None:
+    config = AppConfig.from_mapping(
+        {"VWB_VAULT_PATH": str(tmp_path / "vault"),
+         "VWB_WIKI_EXCLUDE_DIRS": "projects/external/Database; Obsidian;"},
+        env_path=tmp_path / "config" / ".env",
+    )
+    assert config.wiki_exclude_roots == (
+        (tmp_path / "vault/projects/external/Database").resolve(),
+        (tmp_path / "vault/Obsidian").resolve(),
+    )
+
+
 def test_app_config_old_positional_constructor_remains_compatible(tmp_path: Path) -> None:
     remote = RemoteConfig()
     config = AppConfig(tmp_path, tmp_path / "sources", "~/work", "virtuoso-bridge", remote)

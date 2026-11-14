@@ -2,6 +2,15 @@
 
 This repository connects a local analog-design knowledge vault with the upstream `virtuoso-bridge` CLI.
 
+## Installation And Personal Vault
+
+- Windows users run `Install-VirtuosoWiki.cmd`; package users run `vwb setup` after installation.
+- Fresh setup creates `个人知识库` beside the selected `.env`; upgrades reuse the configured vault and preserve existing files.
+- `START_HERE.md` and three vault-local `.agents/skills` explain queries, document ingestion and bridge operations.
+- Desktop CMD creation is opt-in: interactive setup asks once, `--desktop yes` expresses the user's choice, and noninteractive ask skips it. An explicit user request for a desktop entry is sufficient authorization to use yes.
+- `vwb start` starts only an explicitly selected upstream env/profile; unconfigured users stay in local mode. `--offline` skips bridge startup.
+- Keep installer scripts portable. Never publish machine-local paths, hostnames, credentials or a populated personal vault in the program repository.
+
 ## Default Workflow
 
 Before answering analog design questions or editing Virtuoso/Spectre assets:

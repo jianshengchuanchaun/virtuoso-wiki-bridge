@@ -14,7 +14,7 @@
 
 软件包不包含 PDK、书籍、客户设计、Virtuoso 库、凭据或仿真结果；这些内容由用户保存在自己控制的本地知识库中。
 
-`0.1.1` 是 alpha 安全性版本，增加了需审核的两阶段资料整理、防覆盖导入和提取、路径及符号链接边界检查、安全的远程运行名称、明确超时、保护隐私的知识库生成方式和回归测试。完整变化见[更新日志](CHANGELOG.md)。
+`0.2.0` 增加 Windows 安装入口：安装后自动创建 **个人知识库**、完整目录和使用技能，并询问是否创建桌面 CMD。重复安装保留已有资料和配置。详见[中文使用指南](USER_GUIDE.zh-CN.md)和[更新日志](CHANGELOG.md)。
 
 ## 主要功能
 
@@ -44,20 +44,19 @@
 ```powershell
 git clone https://github.com/jianshengchuanchaun/virtuoso-wiki-bridge.git
 Set-Location .\virtuoso-wiki-bridge
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev,books]"
-virtuoso-wiki-bridge --version
+.\Install-VirtuosoWiki.cmd
 ```
 
-如果不需要 PDF/EPUB 提取，仅安装核心包即可：
+也可下载 ZIP 后双击 `Install-VirtuosoWiki.cmd`。安装器创建 `.venv`、安装 PDF/EPUB 依赖、初始化知识库；在交互式 Windows 终端中询问桌面 CMD，默认不创建。使用 `Install-VirtuosoWiki.ps1 -Desktop Yes` 或 `-Desktop No` 可明确选择。程序不会覆盖同名桌面文件。
+
+Linux/macOS 或手动安装：
 
 ```powershell
-python -m pip install -e .
+python -m pip install -e ".[books]"
+vwb setup --desktop no
 ```
 
-如需实时 Virtuoso 封装功能，请在独立的源码目录或环境中安装上游桥接，并按照其当前设置说明操作：
+`pip install` 只安装代码，`setup` 才创建用户目录；Windows 安装器自动完成这两步。只需要核心功能时可去掉 `[books]`。实时 Virtuoso 功能需要额外配置上游桥接；Windows 安装脚本可加 `-WithBridge` 安装依赖，连接配置仍由用户填写。按照上游说明操作：
 
 ```powershell
 virtuoso-bridge init user@host
@@ -67,17 +66,23 @@ virtuoso-bridge status
 
 ## 快速开始
 
-创建本地知识库和对应 `.env`（默认输出为 `./.env`）：
+创建本地知识库和对应 `.env`（默认输出为 `./.env`，新建目录名为 `个人知识库`）：
 
 ```powershell
-virtuoso-wiki-bridge init-vault .\vault
+vwb setup
+# 只初始化目录和配置，不询问桌面入口：
+vwb init-vault
 ```
 
 使用与其他命令相同的全局 `--env` 选项指定生成配置的位置：
 
 ```powershell
-virtuoso-wiki-bridge init-vault .\vault --env .\config\vwb.env
+vwb setup "D:\MyNotes\个人知识库" --env .\config\vwb.env --desktop no
 ```
+
+不提供目录参数时，已有 `.env` 中的知识库路径优先；全新配置则在 `.env` 旁创建“个人知识库”。重复执行补齐缺少的文件，保留原来的笔记、skills 和配置。
+
+双击 `Start-VirtuosoWiki.cmd` 后可使用 `vwb`。未配置 VM 时进入本地模式；配置好上游 env/profile 后会尝试启动连接。`vwb start --offline` 始终跳过连接。
 
 添加一份资料：
 
@@ -94,8 +99,8 @@ virtuoso-wiki-bridge organize-sources
 应用前请审核以下两个文件：
 
 ```text
-vault/sources/ORGANIZE_PLAN.md
-vault/sources/.sources-plan.json
+个人知识库/sources/ORGANIZE_PLAN.md
+个人知识库/sources/.sources-plan.json
 ```
 
 确认无误后，应用审核过的计划：
@@ -135,6 +140,7 @@ virtuoso-wiki-bridge search "phase margin" --env D:\config\vwb.env
 | --- | --- |
 | `VWB_VAULT_PATH` | 本地知识库根目录。 |
 | `VWB_SOURCES_DIR` | 原始资料根目录，默认为 `<vault>/sources`。 |
+| `VWB_WIKI_EXCLUDE_DIRS` | 分号分隔的知识库相对路径，跳过大量生成文件；不影响原始资料搜索。 |
 | `OBSIDIAN_VAULT_PATH` | 知识库根目录的兼容别名。 |
 | `OBSIDIAN_SOURCES_DIR` | 资料根目录的兼容别名。 |
 | `VWB_VIRTUOSO_BRIDGE_CMD` | 上游 CLI 可执行文件，默认为 `virtuoso-bridge`。 |
@@ -154,7 +160,7 @@ virtuoso-wiki-bridge search "phase margin" --env D:\config\vwb.env
 `init-vault` 创建：
 
 ```text
-vault/
+个人知识库/
   concepts/
   entities/
   journal/
@@ -180,12 +186,19 @@ vault/
   .obsidian/
   .gitignore
   .manifest.json
+  START_HERE.md
+  .agents/skills/
+    vwb-personal-wiki/SKILL.md
+    vwb-ingest-books/SKILL.md
+    vwb-bridge-workflow/SKILL.md
   index.md
   log.md
   hot.md
 ```
 
-生成的 Markdown 页面包含 `title`、`category`、`tags`、`sources`、`created` 和 `updated` frontmatter。生成的日志和提取资料元数据使用相对于知识库的标识，避免泄露本地绝对路径。
+生成的目录说明、索引日志和提取文本包含 `title`、`category`、`tags`、`sources`、`created` 和 `updated` frontmatter。生成的日志和提取资料元数据使用相对于知识库的标识，避免泄露本地绝对路径。
+
+`START_HERE.md` 提醒大家如何放资料、提取和提问。三项 `.agents/skills` 分别指导知识查询、增量阅读入库与桥接操作。用兼容客户端打开知识库工作目录即可发现技能，也可以手动读取技能文件。技能是操作指导，不是后台任务：程序提取文本，AI 助手读取并更新知识笔记；本程序不捆绑大模型服务或 API 密钥。
 
 知识库内的 `.gitignore` 用于保护原始资料、`.env`、仿真产物、运行目录和本地 Obsidian 界面状态，同时允许跟踪生成的目录说明。如果知识库已有 `.gitignore`，初始化要求其末尾包含完整生成的安全规则块，避免后续否定规则重新暴露私有路径；自定义规则可放在该块之前。初始化也会拒绝 `sources/` 下嵌套的 `.gitignore`，因为更近的规则可能覆盖根目录策略。这些检查均在写入知识库内容前进行。发布前仍需检查 `git status`；忽略规则只是一层保护，不能使已提交到 Git 的文件自动停止跟踪，也不构成公开专有资料的授权。
 
@@ -322,7 +335,9 @@ virtuoso-wiki-bridge pull-run ota-ac-noise .\runs\ota-ac-noise --timeout 120
 
 | 命令 | 用途 |
 | --- | --- |
-| `init-vault PATH` | 创建本地知识库及对应 `.env`。 |
+| `setup [PATH]` | 初始化个人知识库、指南、技能，并可选择创建 Windows 桌面入口。 |
+| `init-vault [PATH]` | 不询问桌面入口；默认复用配置或创建“个人知识库”。 |
+| `start [--offline]` | 显示使用提示，可启动已明确配置的上游桥接。 |
 | `doctor` | 检查知识库、资料目录、上游桥接及可选 SSH。 |
 | `ingest-source PATH` | 将资料安全复制到允许的类别。 |
 | `extract-sources` | 将本地 PDF/EPUB 提取到稳定的文本目标。 |

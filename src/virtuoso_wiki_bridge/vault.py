@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .config import DEFAULT_VAULT_NAME
+
 CONTENT_FOLDERS = (
     "concepts",
     "entities",
@@ -312,6 +314,10 @@ def env_text(vault_path: Path, *, remote_workdir: str = "~/virtuoso-work/virtuos
         f"VWB_SOURCES_DIR={_env_value(sources)}\n"
         f"OBSIDIAN_VAULT_PATH={_env_value(vault)}\n"
         f"OBSIDIAN_SOURCES_DIR={_env_value(sources)}\n"
+        "OBSIDIAN_LINK_FORMAT=wikilink\n"
+        "WIKI_STAGED_WRITES=false\n"
+        "# Optional semicolon-separated paths, relative to the vault, to prune from wiki search.\n"
+        "VWB_WIKI_EXCLUDE_DIRS=\n"
         f"VWB_REMOTE_WORKDIR={_env_value(remote_workdir)}\n"
         "VWB_VIRTUOSO_BRIDGE_CMD=virtuoso-bridge\n"
         "VWB_VIRTUOSO_BRIDGE_PROFILE=\n"
@@ -330,7 +336,7 @@ def env_text(vault_path: Path, *, remote_workdir: str = "~/virtuoso-work/virtuos
 
 
 def init_vault(
-    vault_path: str | Path,
+    vault_path: str | Path = DEFAULT_VAULT_NAME,
     *,
     env_path: str | Path | None = None,
     force_env: bool = False,
@@ -385,6 +391,15 @@ def init_vault(
         _write_if_missing(subfolder_path / ".gitkeep", "", created, skipped)
 
     _write_if_missing(vault / ".gitignore", GITIGNORE_TEXT, created, skipped)
+    # Templates ship in wheels as well as source checkouts. Copy only missing
+    # files so upgrades never replace a user's notes or customized agent skills.
+    templates = Path(__file__).with_name("templates")
+    for template in sorted(templates.rglob("*.md")):
+        relative = template.relative_to(templates)
+        target = vault / relative
+        if relative.parts[0] == "agent-skills":
+            target = vault / ".agents" / "skills" / Path(*relative.parts[1:])
+        _write_if_missing(target, template.read_text(encoding="utf-8"), created, skipped)
     _write_if_missing(
         vault / "index.md",
         _wiki_page(
@@ -394,6 +409,7 @@ def init_vault(
             timestamp=timestamp,
             body=(
                 "# Wiki Index\n\n"
+                "从 [[START_HERE|个人知识库使用说明]] 开始。 / Start with [[START_HERE]].\n\n"
                 f"*Automatically initialized: {timestamp}*\n\n"
                 "## Concepts\n\n"
                 "*No pages yet. Add source material, then distill notes into this vault.*\n\n"
@@ -402,6 +418,7 @@ def init_vault(
                 "## References\n\n"
                 "## Synthesis\n\n"
                 "## Projects\n"
+                "\n## Journal\n"
             ),
         ),
         created,
@@ -447,7 +464,11 @@ def init_vault(
     )
     _write_if_missing(
         vault / ".manifest.json",
-        json.dumps({"version": 1, "created_at": timestamp, "sources": {}, "extractions": {}}, indent=2) + "\n",
+        json.dumps({
+            "version": 1, "created_at": timestamp, "last_updated": timestamp,
+            "sources": {}, "extractions": {}, "research": {}, "projects": {},
+            "stats": {"total_sources_ingested": 0, "total_pages": 0, "total_projects": 0},
+        }, indent=2) + "\n",
         created,
         skipped,
     )
